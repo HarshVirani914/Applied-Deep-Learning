@@ -1,0 +1,5 @@
+# Add directories or file patterns to ignore during indexing (e.g. foo/ or *.csv)
+
+e4_training_data/*
+!e4_training_data/fashion_keypoints_posed/000000.json
+!e4_training_data/fashion_keypoints_posed/000002.json
