@@ -188,11 +188,160 @@ h_{t-1}│ f_t │ ×   │  tanh   │    ×    │   i_t   │ │
 
 ## 🛠️ **6. OPTIMIZATION & TRAINING**
 
-### **Optimizers**
+### **Optimizers - Complete Equations**
 
-- **SGD**: `w = w - α∇w` - Simple, requires LR tuning
-- **Adam**: Adaptive LR + momentum - Good default choice
-- **Learning Rate**: 0.001 (Adam), 0.01 (SGD)
+#### **1. Stochastic Gradient Descent (SGD)**
+
+```
+Basic SGD:
+w_{t+1} = w_t - α∇L(w_t)
+
+SGD with Momentum:
+v_t = βv_{t-1} + ∇L(w_t)
+w_{t+1} = w_t - αv_t
+
+where:
+- α = learning rate
+- β = momentum coefficient (typically 0.9)
+- v_t = velocity (momentum term)
+```
+
+#### **2. Adagrad (Adaptive Gradient)**
+
+```
+G_t = G_{t-1} + ∇L(w_t)²   (element-wise)
+w_{t+1} = w_t - (α/√(G_t + ε)) · ∇L(w_t)
+
+where:
+- G_t = accumulated squared gradients
+- ε = small constant (1e-8) for numerical stability
+- Problem: G_t grows monotonically → learning rate → 0
+```
+
+#### **3. RMSprop (Root Mean Square Propagation)**
+
+```
+G_t = γG_{t-1} + (1-γ)∇L(w_t)²   (element-wise)
+w_{t+1} = w_t - (α/√(G_t + ε)) · ∇L(w_t)
+
+where:
+- γ = decay rate (typically 0.9)
+- Fixes Adagrad's problem with exponential moving average
+```
+
+#### **4. Adam (Adaptive Moment Estimation)**
+
+```
+m_t = β₁m_{t-1} + (1-β₁)∇L(w_t)        [1st moment - mean]
+v_t = β₂v_{t-1} + (1-β₂)∇L(w_t)²       [2nd moment - variance]
+
+Bias correction:
+m̂_t = m_t/(1-β₁ᵗ)
+v̂_t = v_t/(1-β₂ᵗ)
+
+Update:
+w_{t+1} = w_t - α(m̂_t/√(v̂_t + ε))
+
+Default hyperparameters:
+- α = 0.001, β₁ = 0.9, β₂ = 0.999, ε = 1e-8
+```
+
+#### **5. AdamW (Adam with Weight Decay)**
+
+```
+m_t = β₁m_{t-1} + (1-β₁)∇L(w_t)
+v_t = β₂v_{t-1} + (1-β₂)∇L(w_t)²
+
+m̂_t = m_t/(1-β₁ᵗ)
+v̂_t = v_t/(1-β₂ᵗ)
+
+w_{t+1} = w_t - α(m̂_t/√(v̂_t + ε)) - αλw_t
+
+where:
+- λ = weight decay coefficient (decoupled from gradient)
+- More effective than L2 regularization in Adam
+```
+
+#### **6. Adadelta**
+
+```
+E[g²]_t = ρE[g²]_{t-1} + (1-ρ)∇L(w_t)²
+RMS[g]_t = √(E[g²]_t + ε)
+
+Δw_t = -(RMS[Δw]_{t-1}/RMS[g]_t) · ∇L(w_t)
+w_{t+1} = w_t + Δw_t
+
+E[Δw²]_t = ρE[Δw²]_{t-1} + (1-ρ)Δw_t²
+RMS[Δw]_t = √(E[Δw²]_t + ε)
+
+where:
+- ρ = decay constant (typically 0.95)
+- No learning rate needed!
+```
+
+#### **7. Nadam (Nesterov Adam)**
+
+```
+m_t = β₁m_{t-1} + (1-β₁)∇L(w_t)
+v_t = β₂v_{t-1} + (1-β₂)∇L(w_t)²
+
+m̂_t = m_t/(1-β₁ᵗ)
+v̂_t = v_t/(1-β₂ᵗ)
+
+Nesterov momentum:
+w_{t+1} = w_t - α[β₁m̂_t + ((1-β₁)/(1-β₁ᵗ))∇L(w_t)]/√(v̂_t + ε)
+```
+
+#### **8. RAdam (Rectified Adam)**
+
+```
+Standard Adam updates with rectification term:
+
+ρ∞ = 2/(1-β₂) - 1
+ρ_t = ρ∞ - 2tβ₂ᵗ/(1-β₂ᵗ)
+
+if ρ_t > 4:
+    r_t = √[(ρ_t-4)(ρ_t-2)ρ∞]/[(ρ∞-4)(ρ∞-2)ρ_t]
+    w_{t+1} = w_t - αr_t(m̂_t/√(v̂_t + ε))
+else:
+    w_{t+1} = w_t - αm̂_t
+
+where r_t is the rectification term that stabilizes early training
+```
+
+### **Optimizer Comparison Table**
+
+| Optimizer        | Learning Rate | Momentum      | Adaptive LR    | Memory | Best For                                 |
+| ---------------- | ------------- | ------------- | -------------- | ------ | ---------------------------------------- |
+| **SGD**          | Manual        | Optional      | ❌             | Low    | Simple problems, fine-tuning             |
+| **SGD+Momentum** | Manual        | ✅            | ❌             | Low    | CNNs, when convergence matters           |
+| **Adagrad**      | Adaptive      | ❌            | ✅             | Medium | Sparse data, early stopping              |
+| **RMSprop**      | Adaptive      | ❌            | ✅             | Medium | RNNs, non-stationary objectives          |
+| **Adam**         | Adaptive      | ✅            | ✅             | High   | **Default choice**, most problems        |
+| **AdamW**        | Adaptive      | ✅            | ✅             | High   | Transformers, when regularization needed |
+| **Nadam**        | Adaptive      | ✅ (Nesterov) | ✅             | High   | When faster convergence needed           |
+| **RAdam**        | Adaptive      | ✅            | ✅ (Rectified) | High   | Unstable early training                  |
+
+### **Quick Optimizer Selection Guide**
+
+```
+Problem Type?
+├── Small dataset/Simple model → SGD + Momentum
+├── Computer Vision (CNN) → SGD + Momentum OR Adam
+├── NLP/Transformers → AdamW
+├── RNN/LSTM → RMSprop OR Adam
+├── Unstable training → RAdam
+├── Need fast convergence → Nadam
+└── Default/Unsure → Adam
+```
+
+### **Learning Rate Guidelines**
+
+- **SGD**: 0.01 - 0.1
+- **Adam/AdamW**: 0.001 - 0.003
+- **RMSprop**: 0.001
+- **Rule of thumb**: Start with defaults, then tune
+- **Scheduling**: Reduce LR when loss plateaus
 
 ### **Regularization**
 
